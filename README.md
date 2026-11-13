@@ -48,7 +48,7 @@ soga update
 soga self-update
 ```
 
-菜单和普通子命令使用官方管理程序。顶层 `soga update` / `soga self-update` 通过本仓库脚本执行；**不要使用官方程序交互菜单内的安装/更新/卸载/管理程序升级项**，这些内部行为可能仍使用上游 URL。日常启动、停止、配置和日志操作不受影响。
+默认 `soga` 菜单由本仓库脚本提供，选择 **5. 新增 soga 实例** 使用含 TLS 询问的向导；选择 **6. 官方管理菜单（原版）** 可进入原界面，原界面的新增实例流程不含 TLS 询问。普通子命令仍使用官方管理程序。顶层 `soga update` / `soga self-update` 通过本仓库脚本执行；**不要使用官方程序交互菜单内的安装/更新/卸载/管理程序升级项**，这些内部行为可能仍使用上游 URL。日常启动、停止、配置和日志操作不受影响。
 
 ## 下载来源和独立性
 
@@ -68,3 +68,34 @@ bash /root/install-soga.sh --core-url 'https://你的下载站/soga-v2.18.0'
 默认配置与官方一致，新装后按你的面板填写 type、server_type、node_id、webapi_url、webapi_key、证书等。安装器没有定制 node01 迁移或回退逻辑；覆盖安装对既有配置的处理沿用官方行为。替换正在运行的核心会短暂停服。
 
 已在隔离 Linux 容器验证自定义核心格式、版本、校验失败保护、替换及来源记录。未连接用户生产服务器执行安装。
+
+## 新建实例时询问 TLS 证书申请
+
+更新服务器上的管理入口后，执行 `soga` 并选 **5**，或直接执行 `soga new node01`，会在第⑦项 WebAPI 密钥之后询问：
+
+```text
+⑦ WebAPI 密钥 webapi_key (不可留空):
+⑧ 是否开启 TLS 证书自动申请？[y/N]:
+⑨ 证书域名 cert_domain（仅域名，不带 https://）:
+```
+
+选择 y 并填写域名后，向对应实例写入：
+
+```ini
+cert_mode=http
+cert_domain=你填写的节点域名
+cert_key_length=ec-256
+dns_provider=
+```
+
+选择 n 或直接回车，不开启自动申请；仍使用 TLS 的协议需自行配置有效证书，这不等于关闭协议 TLS。HTTP 验证要求节点域名解析正确、TCP 80 可达，并避免端口占用。
+
+向导仅创建实例配置，不自动启动；检查后执行 `soga start node01`。已有实例不会覆盖。中途按 Ctrl+C 或输入结束，不创建实例。带完整键值参数的 `soga new NAME key=value ...` 保持原非交互方式，不额外询问。
+
+仅更新管理包装脚本（不重装核心）：
+
+```bash
+curl -fL https://raw.githubusercontent.com/Laosixok/soga-v1/master/soga-wrapper.sh -o /tmp/soga-wrapper.sh
+bash -n /tmp/soga-wrapper.sh && install -m 755 /tmp/soga-wrapper.sh /usr/bin/soga
+soga
+```
