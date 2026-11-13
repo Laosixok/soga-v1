@@ -1,0 +1,15 @@
+[Unit]
+Description=soga default instance
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/etc/soga
+ExecStart=/usr/local/soga/soga -c /etc/soga/soga.conf -b /etc/soga/blockList -w /etc/soga/whiteList -d /etc/soga/dns.yml -r /etc/soga/routes.toml
+Restart=on-failure
+RestartSec=10
+LimitNOFILE=1048576
+
+[Install]
+WantedBy=multi-user.target
