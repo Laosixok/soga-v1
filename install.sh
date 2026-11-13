@@ -87,11 +87,16 @@ function is_cmd_exist() {
 }
 
 install_base() {
+    # HTTPS downloads need an up-to-date system CA trust store.
     if [[ x"${release}" == x"centos" ]]; then
-        yum install epel-release -y
-        yum install wget curl tar crontabs socat tzdata -y
+        yum install ca-certificates -y || return 1
+        update-ca-trust extract || return 1
+        yum install epel-release -y || return 1
+        yum install wget curl tar crontabs socat tzdata util-linux -y || return 1
     else
-        apt install wget curl tar cron socat tzdata -y
+        apt-get update || return 1
+        apt-get install -y ca-certificates wget curl tar cron socat tzdata util-linux || return 1
+        update-ca-certificates || return 1
     fi
 }
 
@@ -115,9 +120,6 @@ install_acme() {
 
 install_soga() {
     cd /usr/local/
-    if [[ -e /usr/local/soga/ ]]; then
-        rm /usr/local/soga/ -rf
-    fi
 
     if  [ $# == 0 ] ;then
 #        last_version=$(curl -Ls "https://api.github.com/repos/vaxilu/soga/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
@@ -142,7 +144,13 @@ install_soga() {
         fi
     fi
 
-    tar zxvf soga.tar.gz
+    # Leave the existing installation intact if download/archive validation fails.
+    tar -tzf /usr/local/soga.tar.gz >/dev/null || { echo '安装包无效，原安装未修改'; exit 1; }
+    if [[ -e /usr/local/soga/ ]]; then
+        rm /usr/local/soga/ -rf
+    fi
+
+    tar zxvf soga.tar.gz || exit 1
     rm soga.tar.gz -f
     cd soga
     chmod +x soga
@@ -269,7 +277,7 @@ if [[ -n $CUSTOM_CORE_URL ]]; then
 fi
 
 echo -e "${green}开始安装${plain}"
-install_base
+install_base || { echo '基础依赖或 CA 根证书安装失败，请先修复系统软件源和证书'; exit 1; }
 install_acme
 install_soga ${version}
 
