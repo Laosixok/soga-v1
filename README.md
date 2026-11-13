@@ -1,92 +1,70 @@
-# soga-v1 独立安装与管理
+# soga-v1
 
-本仓库 fork 自 [vaxilu/soga](https://github.com/vaxilu/soga)，保留原有 Git 历史；当前安装、管理脚本为本仓库重新实现。核心使用仓库所有者提供的 **soga 2.18.0 Linux amd64** 文件，未修改其内容。安装包、校验文件、管理脚本全部从 **Laosixok/soga-v1** 下载，不再调用上游安装脚本、上游 Release 或 soga-cmd。
+Fork 自 [vaxilu/soga](https://github.com/vaxilu/soga)。保留官方默认安装流程、配置模板和管理工具，只增加自定义核心下载直链。**不托管任何自定义核心，不内置 node01 或站点密钥。**
 
-“独立”指安装与管理资源独立托管。闭源核心自身的授权、联网检查、证书申请等行为仍由该执行包决定；本项目不移除这些机制。证书申请依赖证书颁发机构，面板依赖你自己的站点。只支持 Linux x86_64、glibc 和 systemd；目前不提供 ARM64 核心。
+## 安装并自动替换核心
 
-## 安装 / 接管已有官方安装
-
-以 root 执行（当前固定版本 2.18.0）：
+下载本仓库脚本，再把示例链接换成你自己的 Linux amd64 执行文件直链：
 
 ```bash
-curl -fL https://github.com/Laosixok/soga-v1/releases/download/v2.18.0/install.sh -o /root/soga-v1-install.sh
-curl -fL https://github.com/Laosixok/soga-v1/releases/download/v2.18.0/install.sh.sha256 -o /root/soga-v1-install.sh.sha256
-# 安装器校验文件中的文件名为 install.sh，按以下方式验证下载副本：
-cd /root
-sed 's/  install.sh$/  soga-v1-install.sh/' soga-v1-install.sh.sha256 | sha256sum -c -
-bash /root/soga-v1-install.sh
+curl -fL https://raw.githubusercontent.com/Laosixok/soga-v1/master/install.sh -o /root/install-soga.sh
+bash /root/install-soga.sh --core-url 'https://你的下载站/soga-v2.18.0'
 ```
 
-安装前需已有 bash、curl、tar、sha256sum、install、flock、systemctl。这些来自发行版基础包及 util-linux。安装器不运行 apt/yum，不安装 acme.sh；此核心有内置证书申请功能。
-
-已有 `/etc/soga`（含 node01 等实例及证书）完整保留。原核心、管理命令、配置和本地 service 文件备份到 `/var/backups/soga-v1/时间-进程号/`。更新会短暂停止并恢复原本运行的 soga 实例。新安装不自动启动，也不会默认开放防火墙。
-
-离线安装：下载本 Release 的 `soga-linux-amd64.tar.gz` 与对应 `.sha256`，放在同一目录，执行：
+可选校验：
 
 ```bash
-sha256sum -c soga-linux-amd64.tar.gz.sha256
-mkdir soga-local
- tar -xzf soga-linux-amd64.tar.gz -C soga-local
-bash soga-local/install.sh
+bash /root/install-soga.sh --core-url 'https://你的下载站/soga-v2.18.0' --core-sha256 '文件的64位SHA256'
 ```
 
-离线安装过程不下载任何上游文件。
+安装先按官方方式部署默认安装包，再在启动服务前替换核心。自定义下载失败会终止安装，不会将官方核心作为自定义核心报告成功。
 
-## 管理实例
+## 只替换已安装核心
+
+首次将管理入口切换到本仓库（不修改节点配置）：
 
 ```bash
+curl -fL https://raw.githubusercontent.com/Laosixok/soga-v1/master/install_cmd.sh -o /root/install-soga-cmd.sh
+bash /root/install-soga-cmd.sh
+soga core 'https://你的下载站/soga-v2.18.0'
+```
+
+也可以指定校验：`soga core '下载直链' 'SHA256'`。
+
+链接必须直接返回 Linux x86_64 ELF 执行文件，不能返回登录页、HTML 或 tar/zip。文件先下载、验证格式和版本，之后才停止运行中的实例并原子替换核心；配置、证书不参与替换。
+
+下载来源以纯文本保存在 `/etc/soga/custom-core-source`（权限 600），不作为 shell 脚本执行。以后通过本仓库的 `soga update` 更新时，会继续使用此自定义链接。若提供 SHA256，发布新文件后需用 `soga core 新链接 新SHA256` 更新来源。
+
+## 原有管理方式
+
+```bash
+soga
 soga list
 soga new node01
 soga config node01
-soga start node01
-soga enable node01
-soga status node01
-soga log node01 -f
 soga restart node01
-soga stop node01
-soga version
+soga log node01 -f
+soga update
+soga self-update
 ```
 
-现有 node01 不要重复新建，直接 `soga config node01` / `soga restart node01`。新建实例会复制 `/etc/soga` 的默认配置，必须先编辑节点 ID、协议、密钥和证书域名。省略实例名操作默认 `/etc/soga/soga.conf`；命名实例使用 `/etc/soga/实例名/soga.conf` 和 `soga@实例名.service`。
+菜单和普通子命令使用官方管理程序。顶层 `soga update` / `soga self-update` 通过本仓库脚本执行；**不要使用官方程序交互菜单内的安装/更新/卸载/管理程序升级项**，这些内部行为可能仍使用上游 URL。日常启动、停止、配置和日志操作不受影响。
 
-配置示例：
+## 下载来源和独立性
 
-```ini
-type=soga-v1
-server_type=anytls
-api=webapi
-node_id=后台实际节点ID
-webapi_url=https://你的面板域名/soga/
-webapi_key=你自己的面板muKey
-soga_key=
-cert_mode=http
-cert_domain=节点证书域名
-cert_key_length=ec-256
-dns_provider=
-```
-
-server_type 可按节点选择 anytls / hysteria / mieru（以面板接口支持为准）。Mieru 不需 TLS 证书；请按核心协议配置要求调整。AnyTLS / Hysteria 的证书域名、DNS 和端口需配置正确；HTTP 验证使用 TCP 80，AnyTLS 本例监听 TCP 443。面板代码需已支持 soga-v1。
-
-## 更新 / 回退
+- 安装入口、核心替换脚本和更新包装入口来自 `Laosixok/soga-v1`。
+- 自定义核心来自你提供的 URL，仓库不上传该核心。
+- 默认基础安装包、默认配置模板及官方管理程序仍下载自官方；这是保留官方默认安装方式的组成部分。
+- 若要让安装下载也完全不依赖官方服务器，可通过 `SOGA_PACKAGE_URL` 指定你自己托管的完整官方格式安装包，通过 `SOGA_CMD_URL` 指定你自己托管的官方管理执行文件。例如：
 
 ```bash
-# 当前默认仍固定为 2.18.0；未来发布新版本后显式指定版本
-soga update 2.18.0
-# 使用安装器输出的真实备份目录
-soga rollback /var/backups/soga-v1/真实备份目录
+SOGA_PACKAGE_URL='https://你的下载站/soga-linux-amd64.tar.gz' \
+SOGA_CMD_URL='https://你的下载站/soga-cmd-linux-amd64' \
+bash /root/install-soga.sh --core-url 'https://你的下载站/soga-v2.18.0'
 ```
 
-回退恢复核心、管理命令和备份的本地 service；保留当前配置及证书，不覆盖最新配置修改。若实例此前已失败停止，回退后需手动启动该实例。升级前后应查看日志；`systemctl is-active` 只说明检查时刻的状态，不能证明进程之后不会退出。
+镜像地址需在后续更新时重新提供。这些文件都可托管在自己的下载站，不必上传 GitHub。保留官方安装器对系统软件源及 acme.sh 的安装步骤；核心自身的授权/联网检查未修改。
 
-不要再运行上游安装/更新命令，否则会覆盖本仓库的管理工具和核心。
+默认配置与官方一致，新装后按你的面板填写 type、server_type、node_id、webapi_url、webapi_key、证书等。安装器没有定制 node01 迁移或回退逻辑；覆盖安装对既有配置的处理沿用官方行为。替换正在运行的核心会短暂停服。
 
-## 自行发布新执行包
-
-将自有 Linux amd64 执行文件放入本项目的 `bundle/soga`，修改 `bundle/VERSION`，并按 `tools/package.py` 生成发行包。核心文件不放进 Git 历史，上传到本仓库 Release。相应 tag 命名为 `v版本号`，Release 附件应包含：
-
-- soga-linux-amd64.tar.gz
-- soga-linux-amd64.tar.gz.sha256
-- install.sh
-- install.sh.sha256
-
-目前发布的二进制只验证了版本、参数和离线启动入口；未修改或审计其内部行为。测试在隔离 Linux 容器中检查安装/接管、保留配置、管理命令、校验失败和不支持架构处理；真实 systemd 服务和生产网络仍需在目标机器验证。
+已在隔离 Linux 容器验证自定义核心格式、版本、校验失败保护、替换及来源记录。未连接用户生产服务器执行安装。
